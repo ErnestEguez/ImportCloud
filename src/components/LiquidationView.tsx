@@ -73,7 +73,74 @@ export default function LiquidationView() {
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [statusFilter, setStatusFilter] = useState<'pending' | 'liquidated'>('pending');
   const [header, setHeader] = useState<LiquidationHeader | null>(null);
-  const [rows, setRows] = useState<LiquidationRow[]>([]);
+  const [baseRows, setBaseRows] = useState<any[]>([]);
+
+  const rows = useMemo<LiquidationRow[]>(() => {
+    if (!header || baseRows.length === 0) return [];
+    
+    const totalFobRaw = baseRows.reduce((sum, row) => sum + row.fobRaw, 0);
+    const totalFobBase = Number(header.fob_total || 0) > 0 ? Number(header.fob_total || 0) : totalFobRaw;
+
+    return baseRows.map((row) => {
+        const fob = round2(row.fobRaw);
+        const pesoPct = totalFobBase > 0 ? round2((fob / totalFobBase) * 100) : 0;
+        const pesoFactor = pesoPct / 100;
+        const distribucionGastos = round2((header.total_gastos_generales + header.total_flete) * pesoFactor);
+        const seguro = round2(header.total_seguro * pesoFactor);
+        const flete = round2(header.total_flete * pesoFactor);
+        const valorCif = round2(fob + seguro + flete);
+        const fodinfa = round2(valorCif * 0.005);
+        const adValorem = round2(valorCif * (row.adValoremPct / 100));
+        const baseIva = round2(valorCif + fodinfa + adValorem);
+        const iva = round2(baseIva * (header.tasa_iva / 100));
+        const totalGastos = round2(distribucionGastos + seguro + flete + fodinfa + adValorem);
+        const costoTotal = round2(fob + totalGastos);
+        const costoUnitario = row.cantidad > 0 ? round6(costoTotal / row.cantidad) : 0;
+        const gastoPct = row.precioUnitario > 0 ? round2(((costoUnitario / row.precioUnitario) - 1) * 100) : 0;
+        const precioVentaCalculado = round6(costoUnitario * (1 + (row.margenGanancia / 100)));
+        const ventaTotalSinIva = round2(row.cantidad * precioVentaCalculado);
+        const utilidadImportacion = round2(ventaTotalSinIva - costoTotal);
+        const proyeccionVentas = round2(row.pvpMercado * row.cantidad);
+        const proyeccionUtilidad = round2(proyeccionVentas - costoTotal);
+        const ventaConIvaMayorista = round6(precioVentaCalculado * (1 + (header.tasa_iva / 100)));
+        const ventaConIvaMinorista = round6(ventaConIvaMayorista * (1 + (row.incrementoPvp / 100)));
+
+        return {
+          detailId: row.detailId,
+          idProducto: row.idProducto,
+          secuencial: row.secuencial,
+          arancel: row.arancel,
+          codigo: row.codigo,
+          descripcion: row.descripcion,
+          cantidad: row.cantidad,
+          precioUnitario: round6(row.precioUnitario),
+          fob,
+          pesoPct,
+          distribucionGastos,
+          seguro,
+          flete,
+          valorCif,
+          fodinfa,
+          adValorem,
+          baseIva,
+          iva,
+          totalGastos,
+          costoTotal,
+          costoUnitario,
+          gastoPct,
+          margenGanancia: round2(row.margenGanancia),
+          precioVentaCalculado,
+          pvpMercado: round6(row.pvpMercado),
+          ventaTotalSinIva,
+          utilidadImportacion,
+          proyeccionVentas,
+          proyeccionUtilidad,
+          ventaConIvaMayorista,
+          incrementoPvp: round2(row.incrementoPvp),
+          ventaConIvaMinorista
+        };
+    });
+  }, [header, baseRows]);
 
   useEffect(() => {
     fetchImports();
@@ -193,7 +260,6 @@ export default function LiquidationView() {
       const totalGastosGenerales = round2((gastosData || []).reduce((sum: number, gasto: any) => sum + Number(gasto.valor_gasto || 0), 0));
       const totalSeguro = round2(Number(imp.seguro ?? imp.valor_seguro ?? 0));
       const totalFlete = round2(Number(imp.flete ?? 0));
-      const tasaIva = Number(imp.tasa_iva || 0);
 
       const productsMap = new Map(productosData.map((prod: any) => [prod.id, prod]));
       const arancelesMap = new Map(arancelesData.map((arancel: any) => [arancel.id, arancel]));
@@ -222,76 +288,13 @@ export default function LiquidationView() {
         };
       });
 
-      const totalFobRaw = baseRows.reduce((sum, row) => sum + row.fobRaw, 0);
-      const totalFobBase = Number(imp.fob_total || 0) > 0 ? Number(imp.fob_total || 0) : totalFobRaw;
-
-      const calculatedRows: LiquidationRow[] = baseRows.map((row) => {
-        const fob = round2(row.fobRaw);
-        const pesoPct = totalFobBase > 0 ? round2((fob / totalFobBase) * 100) : 0;
-        const pesoFactor = pesoPct / 100;
-        const distribucionGastos = round2((totalGastosGenerales + totalFlete) * pesoFactor);
-        const seguro = round2(totalSeguro * pesoFactor);
-        const flete = round2(totalFlete * pesoFactor);
-        const valorCif = round2(fob + seguro + flete);
-        const fodinfa = round2(valorCif * 0.005);
-        const adValorem = round2(valorCif * (row.adValoremPct / 100));
-        const baseIva = round2(valorCif + fodinfa + adValorem);
-        const iva = round2(baseIva * (tasaIva / 100));
-        const totalGastos = round2(distribucionGastos + seguro + flete + fodinfa + adValorem);
-        const costoTotal = round2(fob + totalGastos);
-        const costoUnitario = row.cantidad > 0 ? round6(costoTotal / row.cantidad) : 0;
-        const gastoPct = row.precioUnitario > 0 ? round2(((costoUnitario / row.precioUnitario) - 1) * 100) : 0;
-        const precioVentaCalculado = round6(costoUnitario * (1 + (row.margenGanancia / 100)));
-        const ventaTotalSinIva = round2(row.cantidad * precioVentaCalculado);
-        const utilidadImportacion = round2(ventaTotalSinIva - costoTotal);
-        const proyeccionVentas = round2(row.pvpMercado * row.cantidad);
-        const proyeccionUtilidad = round2(proyeccionVentas - costoTotal);
-        const ventaConIvaMayorista = round6(precioVentaCalculado * (1 + (tasaIva / 100)));
-        const ventaConIvaMinorista = round6(ventaConIvaMayorista * (1 + (row.incrementoPvp / 100)));
-
-        return {
-          detailId: row.detailId,
-          idProducto: row.idProducto,
-          secuencial: row.secuencial,
-          arancel: row.arancel,
-          codigo: row.codigo,
-          descripcion: row.descripcion,
-          cantidad: row.cantidad,
-          precioUnitario: round6(row.precioUnitario),
-          fob,
-          pesoPct,
-          distribucionGastos,
-          seguro,
-          flete,
-          valorCif,
-          fodinfa,
-          adValorem,
-          baseIva,
-          iva,
-          totalGastos,
-          costoTotal,
-          costoUnitario,
-          gastoPct,
-          margenGanancia: round2(row.margenGanancia),
-          precioVentaCalculado,
-          pvpMercado: round6(row.pvpMercado),
-          ventaTotalSinIva,
-          utilidadImportacion,
-          proyeccionVentas,
-          proyeccionUtilidad,
-          ventaConIvaMayorista,
-          incrementoPvp: round2(row.incrementoPvp),
-          ventaConIvaMinorista
-        };
-      });
-
       setHeader({
         ...imp,
         total_gastos_generales: totalGastosGenerales,
         total_seguro: totalSeguro,
         total_flete: totalFlete
       });
-      setRows(calculatedRows);
+      setBaseRows(baseRows);
       setView('detail');
     } catch (error: any) {
       console.error(error);
@@ -471,14 +474,14 @@ export default function LiquidationView() {
 
       const { error: headerError } = await supabase
         .from('importaciones')
-        .update({ estado: 'LIQUIDADA' })
+        .update({ estado: 'LIQUIDADA', flete: header.total_flete })
         .eq('id', header.id);
 
       if (headerError) throw headerError;
 
       alert('Liquidación grabada correctamente.');
       setHeader(null);
-      setRows([]);
+      setBaseRows([]);
       setView('list');
       await fetchImports();
     } catch (error: any) {
@@ -555,7 +558,7 @@ export default function LiquidationView() {
 
       alert('La importación fue restablecida a BORRADOR.');
       setHeader(null);
-      setRows([]);
+      setBaseRows([]);
       setStatusFilter('pending');
       setView('list');
       await fetchImports();
@@ -748,7 +751,16 @@ export default function LiquidationView() {
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Flete</label>
-              <input value={`$ ${format2(header.total_flete)}`} readOnly className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-slate-50" />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={header.total_flete} 
+                  onChange={(e) => setHeader({ ...header, total_flete: Number(e.target.value) || 0 })}
+                  className="w-full pl-7 pr-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none hover:bg-slate-50 transition-colors" 
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Gastos Generales</label>

@@ -20,7 +20,8 @@ export default function ImportList() {
     fecha_importacion: new Date().toISOString().split('T')[0],
     estado: 'BORRADOR',
     tasa_iva: 15,
-    valor_seguro: 0
+    valor_seguro: 0,
+    valor_flete: 0
   });
   const [details, setDetails] = useState<any[]>([]);
   const [editImportId, setEditImportId] = useState<string | null>(null);
@@ -125,7 +126,8 @@ export default function ImportList() {
         fecha_importacion: imp.fecha_importacion || new Date().toISOString().split('T')[0],
         estado: imp.estado || 'BORRADOR',
         tasa_iva: imp.tasa_iva || 15,
-        valor_seguro: imp.seguro || imp.valor_seguro || 0 
+        valor_seguro: imp.seguro || imp.valor_seguro || 0,
+        valor_flete: imp.flete || 0
       });
       setEditImportId(imp.id);
       
@@ -313,6 +315,7 @@ export default function ImportList() {
         estado: header.estado,
         tasa_iva: header.tasa_iva,
         seguro: header.valor_seguro,
+        flete: header.valor_flete,
         fob_total: calculatedFobTotal
       };
 
@@ -353,7 +356,7 @@ export default function ImportList() {
       // Limpiar y volver a lista
       setHeader({
         numero_importacion: '', id_proveedor: '', fecha_importacion: new Date().toISOString().split('T')[0],
-        estado: 'BORRADOR', tasa_iva: 15, valor_seguro: 0
+        estado: 'BORRADOR', tasa_iva: 15, valor_seguro: 0, valor_flete: 0
       });
       setDetails([]);
       setEditImportId(null);
@@ -438,6 +441,14 @@ export default function ImportList() {
                 <input 
                   type="number" step="0.01" required
                   value={header.valor_seguro} onChange={e => setHeader({...header, valor_seguro: parseFloat(e.target.value)})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Valor Flete ($)</label>
+                <input 
+                  type="number" step="0.01" required
+                  value={header.valor_flete} onChange={e => setHeader({...header, valor_flete: parseFloat(e.target.value)})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -556,7 +567,7 @@ export default function ImportList() {
           <button onClick={() => {
             setHeader({
               numero_importacion: '', id_proveedor: '', fecha_importacion: new Date().toISOString().split('T')[0],
-              estado: 'BORRADOR', tasa_iva: 15, valor_seguro: 0
+              estado: 'BORRADOR', tasa_iva: 15, valor_seguro: 0, valor_flete: 0
             });
             setDetails([]);
             setEditImportId(null);
